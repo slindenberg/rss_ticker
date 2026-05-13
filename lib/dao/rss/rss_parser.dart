@@ -2,13 +2,25 @@ import 'package:webfeed/webfeed.dart';
 
 import '../../models/ticker_entry.dart';
 
+/// The result of parsing a raw feed string.
+///
+/// On success, [entries] contains the parsed items and [error] is `null`.
+/// On failure, [entries] is empty and [error] describes the reason.
 class FeedParseResult {
+  /// Parsed ticker entries; empty when parsing failed.
   final List<TickerEntry> entries;
+
+  /// Human-readable error description, or `null` on success.
   final String? error;
 
   const FeedParseResult({required this.entries, this.error});
 }
 
+/// Parses [xml] as an RSS 2.0 or Atom feed and returns a [FeedParseResult].
+///
+/// RSS is attempted first; Atom is tried as a fallback. Items with blank
+/// titles are filtered out. Returns an empty result with an [error] message
+/// when neither format can be parsed or no entries are found.
 FeedParseResult extractTitlesFromFeed(String xml) {
   Object? rssError;
   try {

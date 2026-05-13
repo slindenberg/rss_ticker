@@ -5,11 +5,25 @@ import 'package:flutter/material.dart';
 
 import '../util/color_utils.dart';
 
+/// Immutable configuration for the RSS ticker.
+///
+/// All visual and behavioural settings are held here and persisted to
+/// `~/.rssticker/config.json`.
 class AppConfig {
+  /// Scroll speed of the ticker in logical pixels per second.
   final double textSpeed;
+
+  /// Foreground (text) color of the ticker bar.
   final Color foregroundColor;
+
+  /// Background color of the ticker bar.
   final Color backgroundColor;
+
+  /// String inserted between headline items (e.g. `+++`).
   final String separator;
+
+  /// How often the feeds are automatically refreshed, in minutes.
+  /// A value ≤ 0 disables automatic refresh.
   final int refreshIntervalMinutes;
 
   const AppConfig({
@@ -20,6 +34,7 @@ class AppConfig {
     this.refreshIntervalMinutes = 5,
   });
 
+  /// Returns a copy of this config with the specified fields replaced.
   AppConfig copyWith({
     double? textSpeed,
     Color? foregroundColor,
@@ -38,6 +53,11 @@ class AppConfig {
   }
 }
 
+/// Returns the application's storage directory (`~/.rssticker`),
+/// creating it if it does not yet exist.
+///
+/// Handles sandboxed macOS environments by resolving the real home
+/// directory from environment variables.
 Future<Directory> getStorageDirectory() async {
   String homeDir =
       Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'] ?? '';
@@ -61,11 +81,16 @@ Future<Directory> getStorageDirectory() async {
   return dir;
 }
 
+/// Returns the [File] reference for the config JSON file.
 Future<File> getConfigFile() async {
   final dir = await getStorageDirectory();
   return File('${dir.path}/config.json');
 }
 
+/// Loads [AppConfig] from disk.
+///
+/// Returns [AppConfig] with default values if the file does not exist
+/// or cannot be parsed.
 Future<AppConfig> loadConfig() async {
   try {
     final file = await getConfigFile();
@@ -94,6 +119,9 @@ Future<AppConfig> loadConfig() async {
   }
 }
 
+/// Persists [config] to the config JSON file on disk.
+///
+/// Errors are caught and logged via [debugPrint].
 Future<void> saveConfig(AppConfig config) async {
   try {
     final file = await getConfigFile();

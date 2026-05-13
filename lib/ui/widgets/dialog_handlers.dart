@@ -4,6 +4,11 @@ import '../../config/app_config.dart';
 import 'manage_feeds_dialog.dart';
 import 'settings_dialog.dart';
 
+/// Callback signature for settings changes.
+///
+/// [updated] is the new [AppConfig] with all changes applied.
+/// [speedChanged] is `true` when the scroll speed changed (scroll must restart).
+/// [refreshChanged] is `true` when the refresh interval changed (timer must restart).
 typedef SettingsChangedCallback =
     void Function(
       AppConfig updated, {
@@ -11,6 +16,8 @@ typedef SettingsChangedCallback =
       required bool refreshChanged,
     });
 
+/// Shows the [SettingsDialog] and calls [onChanged] whenever any setting is
+/// modified. The caller is responsible for persisting the returned config.
 Future<void> showSettingsDialog({
   required BuildContext context,
   required AppConfig config,
@@ -50,6 +57,7 @@ Future<void> showSettingsDialog({
   );
 }
 
+/// Shows the [ManageFeedsDialog] and forwards feed list changes to [onChanged].
 Future<void> showManageFeedsDialog({
   required BuildContext context,
   required List<String> feeds,

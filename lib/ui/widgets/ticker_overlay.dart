@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
 
+/// Floating dropdown menu shown when the user clicks the menu button.
+///
+/// Emits string action keys (e.g. `'refresh'`, `'settings'`, `'exit'`)
+/// via [onMenuSelected], keeping the overlay itself free of business logic.
 class TickerOverlay extends StatelessWidget {
+  /// Callback invoked with the action key of the selected menu item.
   final void Function(String) onMenuSelected;
 
   const TickerOverlay({super.key, required this.onMenuSelected});

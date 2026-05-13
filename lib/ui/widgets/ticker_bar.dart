@@ -4,13 +4,31 @@ import '../../config/app_config.dart';
 import '../../models/ticker_entry.dart';
 import 'app_theme.dart';
 
+/// Horizontally scrolling ticker bar that displays [TickerEntry] headlines.
+///
+/// Delegates scroll control entirely to the provided [scrollController].
+/// Hover state is propagated outward via [onHoverChanged] and
+/// [onItemHoverChanged] so the parent can pause/resume scrolling.
 class TickerBar extends StatelessWidget {
+  /// The entries to display; shows a loading placeholder when empty.
   final List<TickerEntry> entries;
+
+  /// Current app configuration (separator, colors).
   final AppConfig config;
+
+  /// External scroll controller managed by [TickerScrollMixin].
   final ScrollController scrollController;
+
+  /// Index of the currently hovered item, or `null`.
   final int? hoveredItemIndex;
+
+  /// Called when the pointer enters or leaves the entire ticker bar.
   final void Function(bool) onHoverChanged;
+
+  /// Called when the pointer enters or leaves an individual item.
   final void Function(int?) onItemHoverChanged;
+
+  /// Called when the user taps a clickable entry.
   final void Function(TickerEntry) onEntryTapped;
 
   const TickerBar({

@@ -9,6 +9,11 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/ticker_entry.dart';
 import '../rss/rss_parser.dart';
 
+/// Fetches and parses all [feeds], returning a flat list of [TickerEntry] items.
+///
+/// Each URL is normalised via [normalizeFeedUrl] before the HTTP request.
+/// Per-feed errors are included as error entries rather than thrown, so the
+/// ticker always has something to display.
 Future<List<TickerEntry>> fetchHeadlines(List<String> feeds) async {
   if (feeds.isEmpty) {
     return const [
@@ -115,6 +120,11 @@ Future<List<TickerEntry>> fetchHeadlines(List<String> feeds) async {
       : const [TickerEntry(title: 'No headlines found')];
 }
 
+/// Normalises a user-supplied feed URL string.
+///
+/// - Trims whitespace.
+/// - Prepends `https://` when no scheme is present.
+/// - Rewrites well-known GitHub Atom paths to their canonical equivalents.
 String normalizeFeedUrl(String url) {
   final trimmed = url.trim();
   if (trimmed.isEmpty) {
@@ -143,6 +153,11 @@ String normalizeFeedUrl(String url) {
   return normalized;
 }
 
+/// Attempts to open [uri] in the default external browser.
+///
+/// Tries `url_launcher` first, then falls back to platform-native commands
+/// (`open` on macOS, `xdg-open` on Linux, `start` on Windows).
+/// Returns `true` if any method succeeds.
 Future<bool> tryOpenInBrowser(Uri uri) async {
   try {
     final canLaunch = await launchUrl(
