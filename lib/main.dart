@@ -30,7 +30,6 @@ class TickerScaffold extends StatefulWidget {
 
 class _TickerScaffoldState extends State<TickerScaffold> {
   final ScrollController _scrollController = ScrollController();
-  static const int _repeatCount = 20;
 
   bool _isMenuOpen = false;
   Timer? _scrollTimer;
@@ -340,13 +339,10 @@ class _TickerScaffoldState extends State<TickerScaffold> {
                       child: ListView.builder(
                         controller: _scrollController,
                         scrollDirection: Axis.horizontal,
-                        itemCount: _repeatCount,
+                        itemCount: _entries.isEmpty ? 1 : _entries.length,
                         itemBuilder: (context, index) {
-                          final entryIndex =
-                              index %
-                              (_entries.isNotEmpty ? _entries.length : 1);
                           final entry = _entries.isNotEmpty
-                              ? _entries[entryIndex]
+                              ? _entries[index]
                               : const TickerEntry(title: 'Loading feeds...');
                           final hasLink =
                               (entry.link?.trim().isNotEmpty ?? false);
