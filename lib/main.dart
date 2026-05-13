@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import 'package:webfeed/webfeed.dart';
 
 Future<void> main() async {
@@ -31,8 +32,11 @@ class _TickerScaffoldState extends State<TickerScaffold> {
   bool _isMenuOpen = false;
   Timer? _scrollTimer;
   DateTime? _lastScrollTick;
+  int _scrollSession = 0;
   List<String> _feeds = [];
-  List<String> _headlines = [];
+  List<_TickerEntry> _entries = [];
+  bool _isTickerHovered = false;
+  int? _hoveredTickerItemIndex;
 
   double _textSpeed = 60;
   Color _foregroundColor = Colors.white;
@@ -63,13 +67,20 @@ class _TickerScaffoldState extends State<TickerScaffold> {
   }
 
   void _restartScrolling() {
+    _scrollSession++;
+    final session = _scrollSession;
     _scrollTimer?.cancel();
     _lastScrollTick = null;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || session != _scrollSession) return;
 
       _scrollTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
+        if (session != _scrollSession) {
+          _scrollTimer?.cancel();
+          return;
+        }
+
         if (!mounted || !_scrollController.hasClients) {
           return;
         }
@@ -79,6 +90,10 @@ class _TickerScaffoldState extends State<TickerScaffold> {
         final now = DateTime.now();
         final previous = _lastScrollTick ?? now;
         _lastScrollTick = now;
+
+        if (_isTickerHovered) {
+          return;
+        }
 
         if (maxExtent <= 0) {
           return;
@@ -97,6 +112,12 @@ class _TickerScaffoldState extends State<TickerScaffold> {
         _scrollController.jumpTo(nextOffset);
       });
     });
+  }
+
+  void _pauseScrolling() {
+    _scrollSession++;
+    _scrollTimer?.cancel();
+    _scrollTimer = null;
   }
 
   void _toggleMenu() {
@@ -243,12 +264,16 @@ class _TickerScaffoldState extends State<TickerScaffold> {
   Future<void> _fetchHeadlines() async {
     if (_feeds.isEmpty) {
       setState(() {
-        _headlines = ['No feeds configured. Add feeds in Manage Feeds.'];
+        _entries = const [
+          _TickerEntry(
+            title: 'No feeds configured. Add feeds in Manage Feeds.',
+          ),
+        ];
       });
       return;
     }
 
-    final List<String> allHeadlines = [];
+    final List<_TickerEntry> allEntries = [];
 
     for (final feedUrl in _feeds) {
       final normalizedFeedUrl = _normalizeFeedUrl(feedUrl);
@@ -260,7 +285,9 @@ class _TickerScaffoldState extends State<TickerScaffold> {
             normalizedFeedUrl: normalizedFeedUrl,
             reason: 'Invalid URL',
           );
-          allHeadlines.add('Error loading ($feedUrl): Invalid URL');
+          allEntries.add(
+            _TickerEntry(title: 'Error loading ($feedUrl): Invalid URL'),
+          );
           continue;
         }
 
@@ -277,8 +304,8 @@ class _TickerScaffoldState extends State<TickerScaffold> {
             allowMalformed: true,
           );
           final parseResult = _extractTitlesFromFeed(responseBody);
-          if (parseResult.titles.isNotEmpty) {
-            allHeadlines.addAll(parseResult.titles);
+          if (parseResult.entries.isNotEmpty) {
+            allEntries.addAll(parseResult.entries);
           } else {
             final reason = parseResult.error ?? 'No entries found in feed';
             _logFeedError(
@@ -286,7 +313,9 @@ class _TickerScaffoldState extends State<TickerScaffold> {
               normalizedFeedUrl: normalizedFeedUrl,
               reason: reason,
             );
-            allHeadlines.add('Error loading ($feedUrl): $reason');
+            allEntries.add(
+              _TickerEntry(title: 'Error loading ($feedUrl): $reason'),
+            );
           }
         } else {
           final reason =
@@ -297,7 +326,9 @@ class _TickerScaffoldState extends State<TickerScaffold> {
             normalizedFeedUrl: normalizedFeedUrl,
             reason: reason,
           );
-          allHeadlines.add('Error loading ($feedUrl): $reason');
+          allEntries.add(
+            _TickerEntry(title: 'Error loading ($feedUrl): $reason'),
+          );
         }
       } on TimeoutException catch (e) {
         _logFeedError(
@@ -306,7 +337,9 @@ class _TickerScaffoldState extends State<TickerScaffold> {
           reason: 'Request timeout',
           error: e,
         );
-        allHeadlines.add('Error loading ($feedUrl): Request timeout');
+        allEntries.add(
+          _TickerEntry(title: 'Error loading ($feedUrl): Request timeout'),
+        );
       } on SocketException catch (e) {
         _logFeedError(
           feedUrl: feedUrl,
@@ -314,7 +347,9 @@ class _TickerScaffoldState extends State<TickerScaffold> {
           reason: 'Network error',
           error: e,
         );
-        allHeadlines.add('Error loading ($feedUrl): Network error');
+        allEntries.add(
+          _TickerEntry(title: 'Error loading ($feedUrl): Network error'),
+        );
       } on HttpException catch (e) {
         _logFeedError(
           feedUrl: feedUrl,
@@ -322,7 +357,9 @@ class _TickerScaffoldState extends State<TickerScaffold> {
           reason: 'HTTP exception',
           error: e,
         );
-        allHeadlines.add('Error loading ($feedUrl): HTTP exception');
+        allEntries.add(
+          _TickerEntry(title: 'Error loading ($feedUrl): HTTP exception'),
+        );
       } catch (e) {
         _logFeedError(
           feedUrl: feedUrl,
@@ -330,14 +367,16 @@ class _TickerScaffoldState extends State<TickerScaffold> {
           reason: 'Unexpected error',
           error: e,
         );
-        allHeadlines.add('Error loading ($feedUrl): Unexpected error');
+        allEntries.add(
+          _TickerEntry(title: 'Error loading ($feedUrl): Unexpected error'),
+        );
       }
     }
 
     setState(() {
-      _headlines = allHeadlines.isNotEmpty
-          ? allHeadlines
-          : ['No headlines found'];
+      _entries = allEntries.isNotEmpty
+          ? allEntries
+          : const [_TickerEntry(title: 'No headlines found')];
     });
   }
 
@@ -373,13 +412,17 @@ class _TickerScaffoldState extends State<TickerScaffold> {
     Object? rssError;
     try {
       final rssFeed = RssFeed.parse(xml);
-      final titles = (rssFeed.items ?? [])
-          .map((item) => item.title?.trim())
-          .where((title) => title != null && title.isNotEmpty)
-          .cast<String>()
+      final entries = (rssFeed.items ?? [])
+          .map(
+            (item) => _TickerEntry(
+              title: item.title?.trim() ?? '',
+              link: item.link?.trim(),
+            ),
+          )
+          .where((entry) => entry.title.isNotEmpty)
           .toList();
-      if (titles.isNotEmpty) {
-        return _FeedParseResult(titles: titles);
+      if (entries.isNotEmpty) {
+        return _FeedParseResult(entries: entries);
       }
     } catch (e) {
       rssError = e;
@@ -388,13 +431,17 @@ class _TickerScaffoldState extends State<TickerScaffold> {
     Object? atomError;
     try {
       final atomFeed = AtomFeed.parse(xml);
-      final atomTitles = (atomFeed.items ?? [])
-          .map((item) => item.title?.trim())
-          .where((title) => title != null && title.isNotEmpty)
-          .cast<String>()
+      final atomEntries = (atomFeed.items ?? [])
+          .map(
+            (item) => _TickerEntry(
+              title: item.title?.trim() ?? '',
+              link: item.links?.firstOrNull?.href?.trim(),
+            ),
+          )
+          .where((entry) => entry.title.isNotEmpty)
           .toList();
-      if (atomTitles.isNotEmpty) {
-        return _FeedParseResult(titles: atomTitles);
+      if (atomEntries.isNotEmpty) {
+        return _FeedParseResult(entries: atomEntries);
       }
     } catch (e) {
       atomError = e;
@@ -406,7 +453,104 @@ class _TickerScaffoldState extends State<TickerScaffold> {
           'Parse failed (rss: ${rssError ?? 'n/a'}, atom: ${atomError ?? 'n/a'})';
     }
 
-    return _FeedParseResult(titles: const [], error: reason);
+    return _FeedParseResult(entries: const [], error: reason);
+  }
+
+  Future<void> _openEntry(_TickerEntry entry) async {
+    final rawLink = entry.link?.trim();
+    if (rawLink == null || rawLink.isEmpty) {
+      _showSnackBar('No link available for this entry.');
+      return;
+    }
+
+    Uri? uri = Uri.tryParse(rawLink);
+    if (uri != null && !uri.hasScheme) {
+      uri = Uri.tryParse('https://$rawLink');
+    }
+
+    if (uri == null || !uri.hasScheme) {
+      _showSnackBar('Invalid link: $rawLink');
+      return;
+    }
+
+    debugPrint('Ticker link clicked: ${uri.toString()}');
+
+    final launched = await _tryOpenInBrowser(uri);
+    if (!launched) {
+      _showSnackBar('Could not open link in browser.');
+    }
+  }
+
+  Future<bool> _tryOpenInBrowser(Uri uri) async {
+    try {
+      final canLaunch = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (canLaunch) {
+        return true;
+      }
+      debugPrint('url_launcher returned false for: ${uri.toString()}');
+    } catch (e) {
+      debugPrint('url_launcher failed for ${uri.toString()}: $e');
+    }
+
+    try {
+      if (Platform.isMacOS) {
+        final result = await Process.run('open', [uri.toString()]);
+        if (result.exitCode == 0) {
+          return true;
+        }
+        debugPrint('open failed (${result.exitCode}): ${result.stderr}');
+      } else if (Platform.isLinux) {
+        final result = await Process.run('xdg-open', [uri.toString()]);
+        if (result.exitCode == 0) {
+          return true;
+        }
+        debugPrint('xdg-open failed (${result.exitCode}): ${result.stderr}');
+      } else if (Platform.isWindows) {
+        final result = await Process.run('cmd', [
+          '/c',
+          'start',
+          '',
+          uri.toString(),
+        ]);
+        if (result.exitCode == 0) {
+          return true;
+        }
+        debugPrint('start failed (${result.exitCode}): ${result.stderr}');
+      }
+    } catch (e) {
+      debugPrint('Process fallback failed for ${uri.toString()}: $e');
+    }
+
+    return false;
+  }
+
+  void _setTickerHovered(bool isHovered) {
+    if (_isTickerHovered == isHovered) {
+      return;
+    }
+
+    _isTickerHovered = isHovered;
+
+    if (isHovered) {
+      _pauseScrolling();
+      return;
+    }
+
+    _hoveredTickerItemIndex = null;
+    _restartScrolling();
+  }
+
+  void _setHoveredTickerItemIndex(int? index) {
+    if (_hoveredTickerItemIndex == index || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _hoveredTickerItemIndex = index;
+    });
   }
 
   void _logFeedError({
@@ -509,28 +653,64 @@ class _TickerScaffoldState extends State<TickerScaffold> {
               child: Row(
                 children: [
                   Expanded(
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _repeatCount,
-                      itemBuilder: (context, index) {
-                        final headlineIndex =
-                            index %
-                            (_headlines.isNotEmpty ? _headlines.length : 1);
-                        final headline = _headlines.isNotEmpty
-                            ? _headlines[headlineIndex]
-                            : 'Loading feeds...';
-                        return Center(
-                          child: Text(
-                            ' $_separator $headline $_separator ',
-                            style: TextStyle(
-                              color: _foregroundColor,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
+                    child: MouseRegion(
+                      onEnter: (_) => _setTickerHovered(true),
+                      onHover: (_) => _setTickerHovered(true),
+                      onExit: (_) => _setTickerHovered(false),
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _repeatCount,
+                        itemBuilder: (context, index) {
+                          final entryIndex =
+                              index %
+                              (_entries.isNotEmpty ? _entries.length : 1);
+                          final entry = _entries.isNotEmpty
+                              ? _entries[entryIndex]
+                              : const _TickerEntry(title: 'Loading feeds...');
+                          final hasLink =
+                              (entry.link?.trim().isNotEmpty ?? false);
+                          final isHoveredLink =
+                              hasLink && _hoveredTickerItemIndex == index;
+                          return Center(
+                            child: MouseRegion(
+                              cursor: hasLink
+                                  ? SystemMouseCursors.click
+                                  : SystemMouseCursors.basic,
+                              onEnter: (_) {
+                                if (hasLink) {
+                                  _setHoveredTickerItemIndex(index);
+                                }
+                              },
+                              onExit: (_) {
+                                if (_hoveredTickerItemIndex == index) {
+                                  _setHoveredTickerItemIndex(null);
+                                }
+                              },
+                              child: InkWell(
+                                onTap: hasLink ? () => _openEntry(entry) : null,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                  child: Text(
+                                    ' $_separator ${entry.title} $_separator ',
+                                    style: TextStyle(
+                                      color: _foregroundColor,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      decoration: isHoveredLink
+                                          ? TextDecoration.underline
+                                          : TextDecoration.none,
+                                      decorationColor: _foregroundColor,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
-                        );
-                      },
+                          );
+                        },
+                      ),
                     ),
                   ),
                   IconButton(
@@ -597,10 +777,17 @@ class _TickerScaffoldState extends State<TickerScaffold> {
 }
 
 class _FeedParseResult {
-  final List<String> titles;
+  final List<_TickerEntry> entries;
   final String? error;
 
-  const _FeedParseResult({required this.titles, this.error});
+  const _FeedParseResult({required this.entries, this.error});
+}
+
+class _TickerEntry {
+  final String title;
+  final String? link;
+
+  const _TickerEntry({required this.title, this.link});
 }
 
 class ManageFeedsDialog extends StatefulWidget {
