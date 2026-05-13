@@ -7,11 +7,13 @@ class SettingsDialog extends StatefulWidget {
   final Color initialForegroundColor;
   final Color initialBackgroundColor;
   final String initialSeparator;
+  final int initialRefreshInterval;
   final void Function({
     required double speed,
     required Color foregroundColor,
     required Color backgroundColor,
     required String separator,
+    required int refreshIntervalMinutes,
   })
   onSettingsChanged;
 
@@ -21,6 +23,7 @@ class SettingsDialog extends StatefulWidget {
     required this.initialForegroundColor,
     required this.initialBackgroundColor,
     required this.initialSeparator,
+    required this.initialRefreshInterval,
     required this.onSettingsChanged,
   });
 
@@ -33,6 +36,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
   late Color _foregroundColor;
   late Color _backgroundColor;
   late TextEditingController _separatorController;
+  late int _refreshIntervalMinutes;
 
   @override
   void initState() {
@@ -41,6 +45,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     _foregroundColor = widget.initialForegroundColor;
     _backgroundColor = widget.initialBackgroundColor;
     _separatorController = TextEditingController(text: widget.initialSeparator);
+    _refreshIntervalMinutes = widget.initialRefreshInterval;
   }
 
   @override
@@ -59,6 +64,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
       foregroundColor: _foregroundColor,
       backgroundColor: _backgroundColor,
       separator: separator,
+      refreshIntervalMinutes: _refreshIntervalMinutes,
     );
   }
 
@@ -149,6 +155,23 @@ class _SettingsDialogState extends State<SettingsDialog> {
                     border: OutlineInputBorder(),
                   ),
                   onChanged: (_) => _emitSettingsChanged(),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Feed-Aktualisierungsintervall: $_refreshIntervalMinutes min',
+                ),
+                Slider(
+                  value: _refreshIntervalMinutes.toDouble(),
+                  min: 1,
+                  max: 60,
+                  divisions: 59,
+                  label: '$_refreshIntervalMinutes min',
+                  onChanged: (value) {
+                    setState(() {
+                      _refreshIntervalMinutes = value.round();
+                    });
+                    _emitSettingsChanged();
+                  },
                 ),
                 const Spacer(),
                 Align(

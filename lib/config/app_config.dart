@@ -10,12 +10,14 @@ class AppConfig {
   final Color foregroundColor;
   final Color backgroundColor;
   final String separator;
+  final int refreshIntervalMinutes;
 
   const AppConfig({
     this.textSpeed = 60,
     this.foregroundColor = Colors.white,
     this.backgroundColor = const Color(0xFF0D47A1),
     this.separator = '+++',
+    this.refreshIntervalMinutes = 5,
   });
 
   AppConfig copyWith({
@@ -23,12 +25,15 @@ class AppConfig {
     Color? foregroundColor,
     Color? backgroundColor,
     String? separator,
+    int? refreshIntervalMinutes,
   }) {
     return AppConfig(
       textSpeed: textSpeed ?? this.textSpeed,
       foregroundColor: foregroundColor ?? this.foregroundColor,
       backgroundColor: backgroundColor ?? this.backgroundColor,
       separator: separator ?? this.separator,
+      refreshIntervalMinutes:
+          refreshIntervalMinutes ?? this.refreshIntervalMinutes,
     );
   }
 }
@@ -81,6 +86,7 @@ Future<AppConfig> loadConfig() async {
         fallback: const Color(0xFF0D47A1),
       ),
       separator: readSeparator(json['separator'], fallback: '+++'),
+      refreshIntervalMinutes: (json['refreshIntervalMinutes'] as int?) ?? 5,
     );
   } catch (e) {
     debugPrint('Error loading config: $e');
@@ -96,6 +102,7 @@ Future<void> saveConfig(AppConfig config) async {
       'foregroundColor': colorToHex(config.foregroundColor),
       'backgroundColor': colorToHex(config.backgroundColor),
       'separator': config.separator,
+      'refreshIntervalMinutes': config.refreshIntervalMinutes,
     };
     await file.writeAsString(jsonEncode(json));
   } catch (e) {

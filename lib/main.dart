@@ -34,6 +34,7 @@ class _TickerScaffoldState extends State<TickerScaffold> {
 
   bool _isMenuOpen = false;
   Timer? _scrollTimer;
+  Timer? _refreshTimer;
   DateTime? _lastScrollTick;
   int _scrollSession = 0;
   List<String> _feeds = [];
@@ -64,6 +65,7 @@ class _TickerScaffoldState extends State<TickerScaffold> {
   @override
   void dispose() {
     _scrollTimer?.cancel();
+    _refreshTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -141,6 +143,16 @@ class _TickerScaffoldState extends State<TickerScaffold> {
     setState(() {
       _config = config;
     });
+    _restartRefreshTimer();
+  }
+
+  void _restartRefreshTimer() {
+    _refreshTimer?.cancel();
+    final interval = _config.refreshIntervalMinutes;
+    if (interval <= 0) return;
+    _refreshTimer = Timer.periodic(Duration(minutes: interval), (_) {
+      _fetchHeadlines();
+    });
   }
 
   Future<void> _saveConfig() async {
@@ -159,8 +171,14 @@ class _TickerScaffoldState extends State<TickerScaffold> {
   }
 
   Future<void> _fetchHeadlines() async {
+    debugPrint(
+      '[RSS Ticker] Fetching feeds at ${DateTime.now().toIso8601String()}...',
+    );
     final entries = await fetchHeadlines(_feeds);
     if (!mounted) return;
+    debugPrint(
+      '[RSS Ticker] Feed update complete: ${entries.length} entries loaded.',
+    );
     setState(() {
       _entries = entries;
     });
@@ -233,24 +251,32 @@ class _TickerScaffoldState extends State<TickerScaffold> {
             initialForegroundColor: _config.foregroundColor,
             initialBackgroundColor: _config.backgroundColor,
             initialSeparator: _config.separator,
+            initialRefreshInterval: _config.refreshIntervalMinutes,
             onSettingsChanged:
                 ({
                   required double speed,
                   required Color foregroundColor,
                   required Color backgroundColor,
                   required String separator,
+                  required int refreshIntervalMinutes,
                 }) {
                   final speedChanged = (_config.textSpeed - speed).abs() > 0.01;
+                  final refreshChanged =
+                      _config.refreshIntervalMinutes != refreshIntervalMinutes;
                   setState(() {
                     _config = _config.copyWith(
                       textSpeed: speed,
                       foregroundColor: foregroundColor,
                       backgroundColor: backgroundColor,
                       separator: separator,
+                      refreshIntervalMinutes: refreshIntervalMinutes,
                     );
                   });
                   if (speedChanged) {
                     _restartScrolling();
+                  }
+                  if (refreshChanged) {
+                    _restartRefreshTimer();
                   }
                 },
           ),
