@@ -1,6 +1,6 @@
 # RSS Ticker with Flutter
 
-> No one likes Rss tickers, but I do. No one in my community uses Flutter, but I give it a chance! :D
+> No one likes RSS tickers, but I do. No one in my community uses Flutter, but I'll give it a try! :D
 
 > This is an approach to create a mostly UI-based app with AI only (Github Copilot). I'm not gonna write a single line of code in this project.
 
