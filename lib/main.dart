@@ -27,9 +27,17 @@ class TickerScaffold extends StatefulWidget {
 class _TickerScaffoldState extends State<TickerScaffold> {
   final ScrollController _scrollController = ScrollController();
   static const int _repeatCount = 20;
+
   bool _isMenuOpen = false;
+  Timer? _scrollTimer;
+  DateTime? _lastScrollTick;
   List<String> _feeds = [];
   List<String> _headlines = [];
+
+  double _textSpeed = 60;
+  Color _foregroundColor = Colors.white;
+  Color _backgroundColor = const Color(0xFF0D47A1);
+  String _separator = '+++';
 
   @override
   void initState() {
@@ -40,40 +48,55 @@ class _TickerScaffoldState extends State<TickerScaffold> {
   }
 
   Future<void> _initializeTicker() async {
+    await _loadConfig();
     await _loadFeeds();
     if (!mounted) return;
     await _fetchHeadlines();
-    _startScrolling();
+    _restartScrolling();
   }
 
   @override
   void dispose() {
+    _scrollTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _startScrolling() async {
-    await Future.delayed(const Duration(milliseconds: 300));
+  void _restartScrolling() {
+    _scrollTimer?.cancel();
+    _lastScrollTick = null;
 
-    while (mounted && _scrollController.hasClients) {
-      final maxExtent = _scrollController.position.maxScrollExtent;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
 
-      if (maxExtent <= 0) {
-        await Future.delayed(const Duration(milliseconds: 500));
-        continue;
-      }
+      _scrollTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
+        if (!mounted || !_scrollController.hasClients) {
+          return;
+        }
 
-      await _scrollController.animateTo(
-        maxExtent,
-        duration: const Duration(seconds: 40),
-        curve: Curves.linear,
-      );
+        final position = _scrollController.position;
+        final maxExtent = position.maxScrollExtent;
+        final now = DateTime.now();
+        final previous = _lastScrollTick ?? now;
+        _lastScrollTick = now;
 
-      if (!mounted || !_scrollController.hasClients) break;
+        if (maxExtent <= 0) {
+          return;
+        }
 
-      _scrollController.jumpTo(0);
-      await Future.delayed(const Duration(milliseconds: 200));
-    }
+        final deltaSeconds =
+            now.difference(previous).inMicroseconds /
+            Duration.microsecondsPerSecond;
+        final nextOffset = position.pixels + (_textSpeed * deltaSeconds);
+
+        if (nextOffset >= maxExtent) {
+          _scrollController.jumpTo(0);
+          return;
+        }
+
+        _scrollController.jumpTo(nextOffset);
+      });
+    });
   }
 
   void _toggleMenu() {
@@ -90,7 +113,7 @@ class _TickerScaffoldState extends State<TickerScaffold> {
     }
   }
 
-  Future<File> _getFeedsFile() async {
+  Future<Directory> _getStorageDirectory() async {
     final homeDir =
         Platform.environment['USERPROFILE'] ??
         Platform.environment['HOME'] ??
@@ -99,7 +122,98 @@ class _TickerScaffoldState extends State<TickerScaffold> {
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
+    return dir;
+  }
+
+  Future<File> _getFeedsFile() async {
+    final dir = await _getStorageDirectory();
     return File('${dir.path}/feeds.json');
+  }
+
+  Future<File> _getConfigFile() async {
+    final dir = await _getStorageDirectory();
+    return File('${dir.path}/config.json');
+  }
+
+  Future<void> _loadConfig() async {
+    try {
+      final file = await _getConfigFile();
+      if (!await file.exists()) {
+        return;
+      }
+
+      final contents = await file.readAsString();
+      final Map<String, dynamic> json =
+          jsonDecode(contents) as Map<String, dynamic>;
+
+      setState(() {
+        _textSpeed = _readDouble(json['textSpeed'], fallback: 60);
+        _foregroundColor = _readColor(
+          json['foregroundColor'],
+          fallback: Colors.white,
+        );
+        _backgroundColor = _readColor(
+          json['backgroundColor'],
+          fallback: const Color(0xFF0D47A1),
+        );
+        _separator = _readSeparator(json['separator'], fallback: '+++');
+      });
+    } catch (e) {
+      debugPrint('Error loading config: $e');
+    }
+  }
+
+  Future<void> _saveConfig() async {
+    try {
+      final file = await _getConfigFile();
+      final json = {
+        'textSpeed': _textSpeed,
+        'foregroundColor': _colorToHex(_foregroundColor),
+        'backgroundColor': _colorToHex(_backgroundColor),
+        'separator': _separator,
+      };
+      await file.writeAsString(jsonEncode(json));
+    } catch (e) {
+      debugPrint('Error saving config: $e');
+    }
+  }
+
+  double _readDouble(Object? value, {required double fallback}) {
+    if (value is num) {
+      return value.toDouble().clamp(10, 300);
+    }
+    return fallback;
+  }
+
+  String _readSeparator(Object? value, {required String fallback}) {
+    if (value is String && value.trim().isNotEmpty) {
+      return value.trim();
+    }
+    return fallback;
+  }
+
+  Color _readColor(Object? value, {required Color fallback}) {
+    if (value is String) {
+      final hex = value.replaceAll('#', '');
+      if (hex.length == 8) {
+        final parsed = int.tryParse(hex, radix: 16);
+        if (parsed != null) {
+          return Color(parsed);
+        }
+      }
+      if (hex.length == 6) {
+        final parsed = int.tryParse(hex, radix: 16);
+        if (parsed != null) {
+          return Color(0xFF000000 | parsed);
+        }
+      }
+    }
+    return fallback;
+  }
+
+  String _colorToHex(Color color) {
+    final value = color.toARGB32();
+    return '#${value.toRadixString(16).padLeft(8, '0').toUpperCase()}';
   }
 
   Future<void> _loadFeeds() async {
@@ -134,9 +248,9 @@ class _TickerScaffoldState extends State<TickerScaffold> {
       return;
     }
 
-    List<String> allHeadlines = [];
+    final List<String> allHeadlines = [];
 
-    for (String feedUrl in _feeds) {
+    for (final feedUrl in _feeds) {
       final normalizedFeedUrl = _normalizeFeedUrl(feedUrl);
       try {
         final uri = Uri.tryParse(normalizedFeedUrl);
@@ -316,7 +430,35 @@ class _TickerScaffoldState extends State<TickerScaffold> {
         _showSnackBar('Refreshing feeds...');
         break;
       case 'settings':
-        _showSnackBar('Opening settings...');
+        showDialog(
+          context: context,
+          builder: (context) => SettingsDialog(
+            initialSpeed: _textSpeed,
+            initialForegroundColor: _foregroundColor,
+            initialBackgroundColor: _backgroundColor,
+            initialSeparator: _separator,
+            onSettingsChanged:
+                ({
+                  required double speed,
+                  required Color foregroundColor,
+                  required Color backgroundColor,
+                  required String separator,
+                }) {
+                  final speedChanged = (_textSpeed - speed).abs() > 0.01;
+                  setState(() {
+                    _textSpeed = speed;
+                    _foregroundColor = foregroundColor;
+                    _backgroundColor = backgroundColor;
+                    _separator = separator;
+                  });
+                  if (speedChanged) {
+                    _restartScrolling();
+                  }
+                },
+          ),
+        ).then((_) {
+          _saveConfig();
+        });
         break;
       case 'manage_feeds':
         showDialog(
@@ -363,7 +505,7 @@ class _TickerScaffoldState extends State<TickerScaffold> {
             right: 0,
             height: 30,
             child: Container(
-              color: Colors.blue.shade900,
+              color: _backgroundColor,
               child: Row(
                 children: [
                   Expanded(
@@ -380,9 +522,9 @@ class _TickerScaffoldState extends State<TickerScaffold> {
                             : 'Loading feeds...';
                         return Center(
                           child: Text(
-                            ' +++ $headline +++ ',
-                            style: const TextStyle(
-                              color: Colors.white,
+                            ' $_separator $headline $_separator ',
+                            style: TextStyle(
+                              color: _foregroundColor,
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
                             ),
@@ -534,8 +676,8 @@ class _ManageFeedsDialogState extends State<ManageFeedsDialog> {
                     DataColumn(label: Text('URL')),
                   ],
                   rows: _feeds.asMap().entries.map((entry) {
-                    int index = entry.key;
-                    String url = entry.value;
+                    final index = entry.key;
+                    final url = entry.value;
                     return DataRow(
                       cells: [
                         DataCell(
@@ -594,6 +736,316 @@ class _ManageFeedsDialogState extends State<ManageFeedsDialog> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class SettingsDialog extends StatefulWidget {
+  final double initialSpeed;
+  final Color initialForegroundColor;
+  final Color initialBackgroundColor;
+  final String initialSeparator;
+  final void Function({
+    required double speed,
+    required Color foregroundColor,
+    required Color backgroundColor,
+    required String separator,
+  })
+  onSettingsChanged;
+
+  const SettingsDialog({
+    super.key,
+    required this.initialSpeed,
+    required this.initialForegroundColor,
+    required this.initialBackgroundColor,
+    required this.initialSeparator,
+    required this.onSettingsChanged,
+  });
+
+  @override
+  State<SettingsDialog> createState() => _SettingsDialogState();
+}
+
+class _SettingsDialogState extends State<SettingsDialog> {
+  late double _speed;
+  late Color _foregroundColor;
+  late Color _backgroundColor;
+  late TextEditingController _separatorController;
+
+  @override
+  void initState() {
+    super.initState();
+    _speed = widget.initialSpeed;
+    _foregroundColor = widget.initialForegroundColor;
+    _backgroundColor = widget.initialBackgroundColor;
+    _separatorController = TextEditingController(text: widget.initialSeparator);
+  }
+
+  @override
+  void dispose() {
+    _separatorController.dispose();
+    super.dispose();
+  }
+
+  void _emitSettingsChanged() {
+    final separator = _separatorController.text.trim().isEmpty
+        ? '+++'
+        : _separatorController.text.trim();
+
+    widget.onSettingsChanged(
+      speed: _speed,
+      foregroundColor: _foregroundColor,
+      backgroundColor: _backgroundColor,
+      separator: separator,
+    );
+  }
+
+  Future<void> _pickForegroundColor() async {
+    final selected = await showDialog<Color>(
+      context: context,
+      builder: (context) => ColorPickerDialog(initialColor: _foregroundColor),
+    );
+    if (selected != null) {
+      setState(() {
+        _foregroundColor = selected;
+      });
+      _emitSettingsChanged();
+    }
+  }
+
+  Future<void> _pickBackgroundColor() async {
+    final selected = await showDialog<Color>(
+      context: context,
+      builder: (context) => ColorPickerDialog(initialColor: _backgroundColor),
+    );
+    if (selected != null) {
+      setState(() {
+        _backgroundColor = selected;
+      });
+      _emitSettingsChanged();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final availableHeight = screenSize.height - 48;
+    final targetHeight = availableHeight.clamp(520.0, 620.0);
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: SizedBox(
+        width: 700,
+        height: targetHeight,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: screenSize.width * 0.92,
+            minHeight: targetHeight,
+            maxHeight: targetHeight,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Appearance',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 20),
+                Text('Textgeschwindigkeit: ${_speed.toStringAsFixed(0)} px/s'),
+                Slider(
+                  value: _speed,
+                  min: 10,
+                  max: 300,
+                  divisions: 58,
+                  label: _speed.toStringAsFixed(0),
+                  onChanged: (value) {
+                    setState(() {
+                      _speed = value;
+                    });
+                    _emitSettingsChanged();
+                  },
+                ),
+                const SizedBox(height: 8),
+                _buildColorChooser(
+                  label: 'Textfarbe Vordergrund',
+                  color: _foregroundColor,
+                  onPressed: _pickForegroundColor,
+                ),
+                const SizedBox(height: 8),
+                _buildColorChooser(
+                  label: 'Textfarbe Hintergrund',
+                  color: _backgroundColor,
+                  onPressed: _pickBackgroundColor,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _separatorController,
+                  decoration: const InputDecoration(
+                    labelText: 'Trennzeichen zwischen den Entries',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (_) => _emitSettingsChanged(),
+                ),
+                const Spacer(),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Close'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildColorChooser({
+    required String label,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return Row(
+      children: [
+        Expanded(child: Text(label)),
+        const SizedBox(width: 8),
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: Colors.black26),
+          ),
+        ),
+        const SizedBox(width: 8),
+        OutlinedButton(onPressed: onPressed, child: const Text('Choose')),
+      ],
+    );
+  }
+}
+
+class ColorPickerDialog extends StatefulWidget {
+  final Color initialColor;
+
+  const ColorPickerDialog({super.key, required this.initialColor});
+
+  @override
+  State<ColorPickerDialog> createState() => _ColorPickerDialogState();
+}
+
+class _ColorPickerDialogState extends State<ColorPickerDialog> {
+  late double _red;
+  late double _green;
+  late double _blue;
+
+  @override
+  void initState() {
+    super.initState();
+    _red = widget.initialColor.r.toDouble();
+    _green = widget.initialColor.g.toDouble();
+    _blue = widget.initialColor.b.toDouble();
+  }
+
+  Color get _currentColor =>
+      Color.fromARGB(255, _red.round(), _green.round(), _blue.round());
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: Container(
+        width: 420,
+        padding: const EdgeInsets.all(16),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.75,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Choose Color',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: _currentColor,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.black26),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildChannelSlider(
+                  label: 'R',
+                  value: _red,
+                  activeColor: Colors.red,
+                  onChanged: (v) => setState(() => _red = v),
+                ),
+                _buildChannelSlider(
+                  label: 'G',
+                  value: _green,
+                  activeColor: Colors.green,
+                  onChanged: (v) => setState(() => _green = v),
+                ),
+                _buildChannelSlider(
+                  label: 'B',
+                  value: _blue,
+                  activeColor: Colors.blue,
+                  onChanged: (v) => setState(() => _blue = v),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Cancel'),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(_currentColor),
+                      child: const Text('Apply'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChannelSlider({
+    required String label,
+    required double value,
+    required Color activeColor,
+    required ValueChanged<double> onChanged,
+  }) {
+    return Row(
+      children: [
+        SizedBox(width: 20, child: Text(label)),
+        Expanded(
+          child: Slider(
+            min: 0,
+            max: 255,
+            divisions: 255,
+            value: value,
+            activeColor: activeColor,
+            label: value.round().toString(),
+            onChanged: onChanged,
+          ),
+        ),
+        SizedBox(width: 36, child: Text(value.round().toString())),
+      ],
     );
   }
 }
