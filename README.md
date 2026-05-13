@@ -1,23 +1,20 @@
 # RSS Ticker with Flutter
 
-> No one likes RSS tickers, but I do. :D
-> This is an approach to create a mostly UI-based app with AI only (Github Copilot). I'm not gonna write a single line of code in this project.
-
 ## Goals
+
+### Done
 
 - Working RSS ticker, that shows news headlines.
 - Headlines should be clickable and open a browser with the related article.
 - Feeds should be updated automatically.
 - Ability to add and remove RSS or Atom feeds easily.
-- Options to change appearence and behavior.
-- Should work on Mac, Windows or Unix desktops.
+- Options to change appearance and behavior.
+- Should work on Mac, Windows or Linux desktops.
 
-### Nice to have
+### Todos
 
 - Autostart
 - Very low memory footprint
-
-## TBD
 
 ## Appendix
 
