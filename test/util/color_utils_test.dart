@@ -19,13 +19,17 @@ void main() {
 
   group('readColor', () {
     test('parses 8-digit AARRGGBB hex string', () {
-      expect(readColor('#FFFFFFFF', fallback: Colors.black),
-          const Color(0xFFFFFFFF));
+      expect(
+        readColor('#FFFFFFFF', fallback: Colors.black),
+        const Color(0xFFFFFFFF),
+      );
     });
 
     test('parses 6-digit RRGGBB hex string (adds FF alpha)', () {
-      expect(readColor('#0D47A1', fallback: Colors.black),
-          const Color(0xFF0D47A1));
+      expect(
+        readColor('#0D47A1', fallback: Colors.black),
+        const Color(0xFF0D47A1),
+      );
     });
 
     test('returns fallback for null', () {
@@ -41,8 +45,10 @@ void main() {
     });
 
     test('parses hex without leading #', () {
-      expect(readColor('FFFFFFFF', fallback: Colors.black),
-          const Color(0xFFFFFFFF));
+      expect(
+        readColor('FFFFFFFF', fallback: Colors.black),
+        const Color(0xFFFFFFFF),
+      );
     });
   });
 

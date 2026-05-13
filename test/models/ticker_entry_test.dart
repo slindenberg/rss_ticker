@@ -14,8 +14,10 @@ void main() {
     });
 
     test('stores optional link', () {
-      const entry =
-          TickerEntry(title: 'With Link', link: 'https://example.com');
+      const entry = TickerEntry(
+        title: 'With Link',
+        link: 'https://example.com',
+      );
       expect(entry.link, 'https://example.com');
     });
 
