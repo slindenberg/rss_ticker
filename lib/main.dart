@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -29,16 +30,20 @@ class _TickerScaffoldState extends State<TickerScaffold> {
   bool _isMenuOpen = false;
   List<String> _feeds = [];
   List<String> _headlines = [];
-  bool _isLoadingFeeds = false;
 
   @override
   void initState() {
     super.initState();
-    _loadFeeds();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fetchHeadlines();
-      _startScrolling();
+      _initializeTicker();
     });
+  }
+
+  Future<void> _initializeTicker() async {
+    await _loadFeeds();
+    if (!mounted) return;
+    await _fetchHeadlines();
+    _startScrolling();
   }
 
   @override
@@ -86,7 +91,10 @@ class _TickerScaffoldState extends State<TickerScaffold> {
   }
 
   Future<File> _getFeedsFile() async {
-    final homeDir = Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'] ?? '';
+    final homeDir =
+        Platform.environment['USERPROFILE'] ??
+        Platform.environment['HOME'] ??
+        '';
     final dir = Directory('$homeDir/.rssticker');
     if (!await dir.exists()) {
       await dir.create(recursive: true);
@@ -126,24 +134,89 @@ class _TickerScaffoldState extends State<TickerScaffold> {
       return;
     }
 
-    setState(() => _isLoadingFeeds = true);
     List<String> allHeadlines = [];
 
     for (String feedUrl in _feeds) {
+      final normalizedFeedUrl = _normalizeFeedUrl(feedUrl);
       try {
-        final response = await http.get(Uri.parse(feedUrl)).timeout(
-          const Duration(seconds: 10),
-        );
+        final uri = Uri.tryParse(normalizedFeedUrl);
+        if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+          _logFeedError(
+            feedUrl: feedUrl,
+            normalizedFeedUrl: normalizedFeedUrl,
+            reason: 'Invalid URL',
+          );
+          allHeadlines.add('Error loading ($feedUrl): Invalid URL');
+          continue;
+        }
+
+        final response = await http
+            .get(
+              uri,
+              headers: const {'User-Agent': 'rss-ticker/1.0 (+Flutter)'},
+            )
+            .timeout(const Duration(seconds: 10));
 
         if (response.statusCode == 200) {
-          final rssFeed = RssFeed.parse(response.body);
-          for (var item in rssFeed.items ?? []) {
-            allHeadlines.add(item.title ?? 'Untitled');
+          final responseBody = utf8.decode(
+            response.bodyBytes,
+            allowMalformed: true,
+          );
+          final parseResult = _extractTitlesFromFeed(responseBody);
+          if (parseResult.titles.isNotEmpty) {
+            allHeadlines.addAll(parseResult.titles);
+          } else {
+            final reason = parseResult.error ?? 'No entries found in feed';
+            _logFeedError(
+              feedUrl: feedUrl,
+              normalizedFeedUrl: normalizedFeedUrl,
+              reason: reason,
+            );
+            allHeadlines.add('Error loading ($feedUrl): $reason');
           }
+        } else {
+          final reason =
+              'HTTP ${response.statusCode} ${response.reasonPhrase ?? ''}'
+                  .trim();
+          _logFeedError(
+            feedUrl: feedUrl,
+            normalizedFeedUrl: normalizedFeedUrl,
+            reason: reason,
+          );
+          allHeadlines.add('Error loading ($feedUrl): $reason');
         }
+      } on TimeoutException catch (e) {
+        _logFeedError(
+          feedUrl: feedUrl,
+          normalizedFeedUrl: normalizedFeedUrl,
+          reason: 'Request timeout',
+          error: e,
+        );
+        allHeadlines.add('Error loading ($feedUrl): Request timeout');
+      } on SocketException catch (e) {
+        _logFeedError(
+          feedUrl: feedUrl,
+          normalizedFeedUrl: normalizedFeedUrl,
+          reason: 'Network error',
+          error: e,
+        );
+        allHeadlines.add('Error loading ($feedUrl): Network error');
+      } on HttpException catch (e) {
+        _logFeedError(
+          feedUrl: feedUrl,
+          normalizedFeedUrl: normalizedFeedUrl,
+          reason: 'HTTP exception',
+          error: e,
+        );
+        allHeadlines.add('Error loading ($feedUrl): HTTP exception');
       } catch (e) {
-        debugPrint('Error fetching feed $feedUrl: $e');
-        allHeadlines.add('Error loading: $feedUrl');
+        _logFeedError(
+          feedUrl: feedUrl,
+          normalizedFeedUrl: normalizedFeedUrl,
+          reason: 'Unexpected error',
+          error: e,
+        );
+        allHeadlines.add('Error loading ($feedUrl): Unexpected error');
       }
     }
 
@@ -151,8 +224,87 @@ class _TickerScaffoldState extends State<TickerScaffold> {
       _headlines = allHeadlines.isNotEmpty
           ? allHeadlines
           : ['No headlines found'];
-      _isLoadingFeeds = false;
     });
+  }
+
+  String _normalizeFeedUrl(String url) {
+    final trimmed = url.trim();
+    if (trimmed.isEmpty) {
+      return trimmed;
+    }
+
+    String normalized = trimmed;
+    Uri? uri = Uri.tryParse(normalized);
+
+    if (uri == null || uri.scheme.isEmpty) {
+      normalized = 'https://$trimmed';
+      uri = Uri.tryParse(normalized);
+    }
+
+    if (uri == null) {
+      return normalized;
+    }
+
+    final host = uri.host.toLowerCase();
+    final path = uri.path.toLowerCase();
+    if ((host == 'github.com' || host == 'www.github.com') &&
+        path.startsWith('/blog.atom')) {
+      return 'https://github.blog/feed/';
+    }
+
+    return normalized;
+  }
+
+  _FeedParseResult _extractTitlesFromFeed(String xml) {
+    Object? rssError;
+    try {
+      final rssFeed = RssFeed.parse(xml);
+      final titles = (rssFeed.items ?? [])
+          .map((item) => item.title?.trim())
+          .where((title) => title != null && title.isNotEmpty)
+          .cast<String>()
+          .toList();
+      if (titles.isNotEmpty) {
+        return _FeedParseResult(titles: titles);
+      }
+    } catch (e) {
+      rssError = e;
+    }
+
+    Object? atomError;
+    try {
+      final atomFeed = AtomFeed.parse(xml);
+      final atomTitles = (atomFeed.items ?? [])
+          .map((item) => item.title?.trim())
+          .where((title) => title != null && title.isNotEmpty)
+          .cast<String>()
+          .toList();
+      if (atomTitles.isNotEmpty) {
+        return _FeedParseResult(titles: atomTitles);
+      }
+    } catch (e) {
+      atomError = e;
+    }
+
+    String reason = 'No entries found in feed';
+    if (rssError != null || atomError != null) {
+      reason =
+          'Parse failed (rss: ${rssError ?? 'n/a'}, atom: ${atomError ?? 'n/a'})';
+    }
+
+    return _FeedParseResult(titles: const [], error: reason);
+  }
+
+  void _logFeedError({
+    required String feedUrl,
+    required String normalizedFeedUrl,
+    required String reason,
+    Object? error,
+  }) {
+    final suffix = error != null ? ' | error: $error' : '';
+    debugPrint(
+      'Feed load error | input: $feedUrl | normalized: $normalizedFeedUrl | reason: $reason$suffix',
+    );
   }
 
   void _onMenuSelected(String value) {
@@ -220,7 +372,9 @@ class _TickerScaffoldState extends State<TickerScaffold> {
                       scrollDirection: Axis.horizontal,
                       itemCount: _repeatCount,
                       itemBuilder: (context, index) {
-                        final headlineIndex = index % (_headlines.isNotEmpty ? _headlines.length : 1);
+                        final headlineIndex =
+                            index %
+                            (_headlines.isNotEmpty ? _headlines.length : 1);
                         final headline = _headlines.isNotEmpty
                             ? _headlines[headlineIndex]
                             : 'Loading feeds...';
@@ -239,7 +393,11 @@ class _TickerScaffoldState extends State<TickerScaffold> {
                   ),
                   IconButton(
                     onPressed: _toggleMenu,
-                    icon: const Icon(Icons.more_vert, color: Colors.white, size: 16),
+                    icon: const Icon(
+                      Icons.more_vert,
+                      color: Colors.white,
+                      size: 16,
+                    ),
                   ),
                 ],
               ),
@@ -296,6 +454,13 @@ class _TickerScaffoldState extends State<TickerScaffold> {
   }
 }
 
+class _FeedParseResult {
+  final List<String> titles;
+  final String? error;
+
+  const _FeedParseResult({required this.titles, this.error});
+}
+
 class ManageFeedsDialog extends StatefulWidget {
   final List<String> feeds;
   final ValueChanged<List<String>> onFeedsChanged;
@@ -322,9 +487,10 @@ class _ManageFeedsDialogState extends State<ManageFeedsDialog> {
   }
 
   void _addFeed() {
-    if (_urlController.text.isNotEmpty) {
+    final normalizedInput = _urlController.text.trim();
+    if (normalizedInput.isNotEmpty) {
       setState(() {
-        _feeds.add(_urlController.text);
+        _feeds.add(normalizedInput);
         _urlController.clear();
         _selectedIndices.clear();
       });
@@ -334,7 +500,9 @@ class _ManageFeedsDialogState extends State<ManageFeedsDialog> {
 
   void _removeSelected() {
     setState(() {
-      _feeds = _feeds.asMap().entries
+      _feeds = _feeds
+          .asMap()
+          .entries
           .where((entry) => !_selectedIndices.contains(entry.key))
           .map((entry) => entry.value)
           .toList();
@@ -410,10 +578,7 @@ class _ManageFeedsDialogState extends State<ManageFeedsDialog> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _addFeed,
-                  child: const Text('+'),
-                ),
+                ElevatedButton(onPressed: _addFeed, child: const Text('+')),
                 const SizedBox(width: 8),
                 ElevatedButton(
                   onPressed: _removeSelected,
