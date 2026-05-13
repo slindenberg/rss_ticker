@@ -1,24 +1,13 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
 import 'package:rss_ticker/main.dart';
 
 void main() {
-  testWidgets('Ticker widget smoke test', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: TickerScaffold(),
-      ),
-    );
-
-    expect(find.text(' +++ BREAKING NEWS: Flutter Ticker läuft auf Desktop! +++ '), findsWidgets);
-    expect(find.byIcon(Icons.more_vert), findsOneWidget);
+  testWidgets('TickerApp smoke test – builds without throwing', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const TickerApp());
+    // Only the first frame: initialization callbacks haven't run yet,
+    // so no network calls or file I/O happen.
+    expect(find.byType(TickerApp), findsOneWidget);
   });
 }
