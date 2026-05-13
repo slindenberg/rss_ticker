@@ -52,6 +52,8 @@ class _TickerScaffoldState extends State<TickerScaffold> {
   }
 
   Future<void> _initializeTicker() async {
+    final storageDir = await _getStorageDirectory();
+    debugPrint('Default directory: ${storageDir.path}');
     await _loadConfig();
     await _loadFeeds();
     if (!mounted) return;
@@ -135,10 +137,23 @@ class _TickerScaffoldState extends State<TickerScaffold> {
   }
 
   Future<Directory> _getStorageDirectory() async {
-    final homeDir =
+    String homeDir =
         Platform.environment['USERPROFILE'] ??
         Platform.environment['HOME'] ??
         '';
+
+    if (homeDir.contains('Library/Containers')) {
+      final user = Platform.environment['USER'] ?? '';
+      if (user.isNotEmpty) {
+        homeDir = '/Users/$user';
+      } else {
+        final parts = homeDir.split('/');
+        if (parts.length > 1 && parts[0].isEmpty && parts[1] == 'Users') {
+          homeDir = '/${parts[1]}/${parts[2]}';
+        }
+      }
+    }
+
     final dir = Directory('$homeDir/.rssticker');
     if (!await dir.exists()) {
       await dir.create(recursive: true);
