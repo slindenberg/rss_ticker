@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'screens/ticker_screen.dart';
+import 'ui/screens/ticker_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

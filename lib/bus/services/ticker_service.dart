@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../config/app_config.dart' show AppConfig;
-import '../config/app_config.dart' as config_impl;
-import '../config/feeds_storage.dart' as storage;
-import '../models/ticker_entry.dart';
-import '../network/feed_fetcher.dart' as fetcher;
+import '../../config/app_config.dart' show AppConfig;
+import '../../config/app_config.dart' as config_impl;
+import '../../config/feeds_storage.dart' as storage;
+import '../../models/ticker_entry.dart';
+import '../../dao/network/feed_fetcher.dart' as fetcher;
 
 class TickerService {
   Future<void> initialize() async {

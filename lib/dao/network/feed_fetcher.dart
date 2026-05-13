@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
-import '../models/ticker_entry.dart';
+import '../../models/ticker_entry.dart';
 import '../rss/rss_parser.dart';
 
 Future<List<TickerEntry>> fetchHeadlines(List<String> feeds) async {

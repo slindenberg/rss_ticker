@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../config/app_config.dart';
-import '../models/ticker_entry.dart';
+import '../../config/app_config.dart';
+import '../../models/ticker_entry.dart';
 import 'app_theme.dart';
 
 class TickerBar extends StatelessWidget {

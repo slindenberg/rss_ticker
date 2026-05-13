@@ -3,10 +3,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import '../config/app_config.dart';
-import '../logic/ticker_scroll_mixin.dart';
-import '../models/ticker_entry.dart';
-import '../services/ticker_service.dart';
+import '../../config/app_config.dart';
+import '../../bus/logic/ticker_scroll_mixin.dart';
+import '../../models/ticker_entry.dart';
+import '../../bus/services/ticker_service.dart';
 import '../widgets/app_theme.dart';
 import '../widgets/dialog_handlers.dart';
 import '../widgets/ticker_bar.dart';

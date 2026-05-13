@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../config/app_config.dart';
+import '../../config/app_config.dart';
 import 'manage_feeds_dialog.dart';
 import 'settings_dialog.dart';
 

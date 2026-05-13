@@ -1,6 +1,6 @@
 import 'package:webfeed/webfeed.dart';
 
-import '../models/ticker_entry.dart';
+import '../../models/ticker_entry.dart';
 
 class FeedParseResult {
   final List<TickerEntry> entries;
