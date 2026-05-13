@@ -1,0 +1,218 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+
+import '../config/app_config.dart';
+import '../logic/ticker_scroll_mixin.dart';
+import '../models/ticker_entry.dart';
+import '../services/ticker_service.dart';
+import '../widgets/app_theme.dart';
+import '../widgets/dialog_handlers.dart';
+import '../widgets/ticker_bar.dart';
+import '../widgets/ticker_overlay.dart';
+
+class TickerScreen extends StatefulWidget {
+  const TickerScreen({super.key});
+
+  @override
+  State<TickerScreen> createState() => _TickerScreenState();
+}
+
+class _TickerScreenState extends State<TickerScreen>
+    with TickerScrollMixin<TickerScreen> {
+  @override
+  AppConfig get tickerConfig => _config;
+
+  bool _isMenuOpen = false;
+  Timer? _refreshTimer;
+  List<String> _feeds = [];
+  List<TickerEntry> _entries = [];
+  AppConfig _config = const AppConfig();
+
+  final _service = TickerService();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initializeTicker());
+  }
+
+  @override
+  void dispose() {
+    scrollTimer?.cancel();
+    _refreshTimer?.cancel();
+    scrollController.dispose();
+    super.dispose();
+  }
+
+  // ── Initialization ────────────────────────────────────────────────────────
+
+  Future<void> _initializeTicker() async {
+    await _service.initialize();
+    await _loadConfig();
+    await _loadFeeds();
+    if (!mounted) return;
+    await _fetchHeadlines();
+    restartScrolling();
+  }
+
+  // ── Data ──────────────────────────────────────────────────────────────────
+
+  Future<void> _loadConfig() async {
+    final config = await _service.loadConfig();
+    if (!mounted) return;
+    setState(() => _config = config);
+    _restartRefreshTimer();
+  }
+
+  void _restartRefreshTimer() {
+    _refreshTimer?.cancel();
+    final interval = _config.refreshIntervalMinutes;
+    if (interval <= 0) return;
+    _refreshTimer = Timer.periodic(
+      Duration(minutes: interval),
+      (_) => _fetchHeadlines(),
+    );
+  }
+
+  Future<void> _loadFeeds() async {
+    final feeds = await _service.loadFeeds();
+    if (!mounted) return;
+    setState(() => _feeds = feeds);
+  }
+
+  Future<void> _fetchHeadlines() async {
+    final entries = await _service.fetchHeadlines(_feeds);
+    if (!mounted) return;
+    setState(() => _entries = entries);
+  }
+
+  Future<void> _openEntry(TickerEntry entry) async {
+    final launched = await _service.openEntry(entry);
+    if (!launched) _showSnackBar('Could not open link.');
+  }
+
+  // ── Menu ──────────────────────────────────────────────────────────────────
+
+  void _toggleMenu() => setState(() => _isMenuOpen = !_isMenuOpen);
+
+  void _closeMenu() {
+    if (_isMenuOpen) setState(() => _isMenuOpen = false);
+  }
+
+  Future<void> _onMenuSelected(String value) async {
+    _closeMenu();
+    switch (value) {
+      case 'refresh':
+        scrollController.jumpTo(0);
+        _fetchHeadlines();
+        _showSnackBar('Refreshing feeds...');
+      case 'settings':
+        await showSettingsDialog(
+          context: context,
+          config: _config,
+          onChanged:
+              (
+                updated, {
+                required bool speedChanged,
+                required bool refreshChanged,
+              }) {
+                setState(() => _config = updated);
+                if (speedChanged) restartScrolling();
+                if (refreshChanged) _restartRefreshTimer();
+              },
+        );
+        await _service.saveConfig(_config);
+      case 'manage_feeds':
+        await showManageFeedsDialog(
+          context: context,
+          feeds: _feeds,
+          onChanged: (newFeeds) {
+            setState(() => _feeds = newFeeds);
+            _service.saveFeeds(newFeeds);
+            _fetchHeadlines();
+          },
+        );
+      case 'help':
+        _showSnackBar('Showing help...');
+      case 'exit':
+        exit(0);
+    }
+  }
+
+  void _showSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 1),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: TickerTheme.themeData(_config),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 30,
+              child: Container(
+                color: _config.backgroundColor,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TickerBar(
+                        entries: _entries,
+                        config: _config,
+                        scrollController: scrollController,
+                        hoveredItemIndex: hoveredTickerItemIndex,
+                        onHoverChanged: setTickerHovered,
+                        onItemHoverChanged: setHoveredTickerItemIndex,
+                        onEntryTapped: _openEntry,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _toggleMenu,
+                      icon: const Icon(
+                        Icons.more_vert,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (_isMenuOpen) ...[
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: _closeMenu,
+                  behavior: HitTestBehavior.translucent,
+                  child: const SizedBox.shrink(),
+                ),
+              ),
+              Positioned(
+                top: 30,
+                right: 10,
+                width: 200,
+                child: TickerOverlay(onMenuSelected: _onMenuSelected),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
