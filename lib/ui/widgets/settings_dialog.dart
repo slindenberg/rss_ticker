@@ -8,12 +8,16 @@ class SettingsDialog extends StatefulWidget {
   final Color initialBackgroundColor;
   final String initialSeparator;
   final int initialRefreshInterval;
+  final bool initialShowFeedTitle;
+  final bool initialFeedTitleStatic;
   final void Function({
     required double speed,
     required Color foregroundColor,
     required Color backgroundColor,
     required String separator,
     required int refreshIntervalMinutes,
+    required bool showFeedTitle,
+    required bool feedTitleStatic,
   })
   onSettingsChanged;
 
@@ -24,6 +28,8 @@ class SettingsDialog extends StatefulWidget {
     required this.initialBackgroundColor,
     required this.initialSeparator,
     required this.initialRefreshInterval,
+    required this.initialShowFeedTitle,
+    required this.initialFeedTitleStatic,
     required this.onSettingsChanged,
   });
 
@@ -37,6 +43,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
   late Color _backgroundColor;
   late TextEditingController _separatorController;
   late int _refreshIntervalMinutes;
+  late bool _showFeedTitle;
+  late bool _feedTitleStatic;
 
   @override
   void initState() {
@@ -46,6 +54,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
     _backgroundColor = widget.initialBackgroundColor;
     _separatorController = TextEditingController(text: widget.initialSeparator);
     _refreshIntervalMinutes = widget.initialRefreshInterval;
+    _showFeedTitle = widget.initialShowFeedTitle;
+    _feedTitleStatic = widget.initialFeedTitleStatic;
   }
 
   @override
@@ -65,6 +75,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
       backgroundColor: _backgroundColor,
       separator: separator,
       refreshIntervalMinutes: _refreshIntervalMinutes,
+      showFeedTitle: _showFeedTitle,
+      feedTitleStatic: _feedTitleStatic,
     );
   }
 
@@ -174,6 +186,31 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   },
                 ),
                 const Spacer(),
+                const Text('Feed title'),
+                const SizedBox(height: 8),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'off', label: Text('Off')),
+                    ButtonSegment(value: 'inline', label: Text('Inline')),
+                    ButtonSegment(value: 'static', label: Text('Static left')),
+                  ],
+                  selected: {
+                    !_showFeedTitle
+                        ? 'off'
+                        : _feedTitleStatic
+                        ? 'static'
+                        : 'inline',
+                  },
+                  onSelectionChanged: (selection) {
+                    final mode = selection.first;
+                    setState(() {
+                      _showFeedTitle = mode != 'off';
+                      _feedTitleStatic = mode == 'static';
+                    });
+                    _emitSettingsChanged();
+                  },
+                ),
+                const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerRight,
                   child: ElevatedButton(

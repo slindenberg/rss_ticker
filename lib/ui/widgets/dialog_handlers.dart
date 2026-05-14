@@ -31,6 +31,8 @@ Future<void> showSettingsDialog({
       initialBackgroundColor: config.backgroundColor,
       initialSeparator: config.separator,
       initialRefreshInterval: config.refreshIntervalMinutes,
+      initialShowFeedTitle: config.showFeedTitle,
+      initialFeedTitleStatic: config.feedTitleStatic,
       onSettingsChanged:
           ({
             required double speed,
@@ -38,6 +40,8 @@ Future<void> showSettingsDialog({
             required Color backgroundColor,
             required String separator,
             required int refreshIntervalMinutes,
+            required bool showFeedTitle,
+            required bool feedTitleStatic,
           }) {
             final updated = config.copyWith(
               textSpeed: speed,
@@ -45,6 +49,8 @@ Future<void> showSettingsDialog({
               backgroundColor: backgroundColor,
               separator: separator,
               refreshIntervalMinutes: refreshIntervalMinutes,
+              showFeedTitle: showFeedTitle,
+              feedTitleStatic: feedTitleStatic,
             );
             onChanged(
               updated,

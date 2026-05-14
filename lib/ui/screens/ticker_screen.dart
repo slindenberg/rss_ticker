@@ -30,16 +30,24 @@ class _TickerScreenState extends State<TickerScreen>
   List<TickerEntry> _entries = [];
   AppConfig _config = const AppConfig();
 
+  /// Feed title shown in the static label; updated by the scroll listener.
+  String? _currentFeedTitle;
+
+  /// Pre-computed cumulative item widths used by the scroll listener.
+  List<double> _cumulativeItemWidths = [];
+
   final _service = TickerService();
 
   @override
   void initState() {
     super.initState();
+    scrollController.addListener(_updateCurrentFeedTitle);
     WidgetsBinding.instance.addPostFrameCallback((_) => _initializeTicker());
   }
 
   @override
   void dispose() {
+    scrollController.removeListener(_updateCurrentFeedTitle);
     scrollTimer?.cancel();
     _refreshTimer?.cancel();
     scrollController.dispose();
@@ -86,6 +94,46 @@ class _TickerScreenState extends State<TickerScreen>
     final entries = await _service.fetchHeadlines(_feeds);
     if (!mounted) return;
     setState(() => _entries = entries);
+    _computeCumulativeWidths();
+    _updateCurrentFeedTitle();
+  }
+
+  /// Pre-computes the cumulative pixel widths of all ticker items so the
+  /// scroll listener can efficiently determine the currently visible entry.
+  void _computeCumulativeWidths() {
+    const style = TextStyle(fontSize: 14, fontWeight: FontWeight.bold);
+    double cumulative = 0;
+    _cumulativeItemWidths = List<double>.generate(_entries.length, (i) {
+      final text =
+          ' ${_config.separator} ${_entries[i].title} ${_config.separator} ';
+      final tp = TextPainter(
+        text: TextSpan(text: text, style: style),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      cumulative += tp.width + 8; // 8 = horizontal padding
+      return cumulative;
+    });
+  }
+
+  /// Scroll listener: finds the entry whose right edge first exceeds the
+  /// current scroll offset, then updates [_currentFeedTitle].
+  void _updateCurrentFeedTitle() {
+    if (!_config.showFeedTitle || !_config.feedTitleStatic) return;
+    if (_entries.isEmpty || _cumulativeItemWidths.isEmpty) return;
+    if (!scrollController.hasClients) return;
+
+    final offset = scrollController.offset;
+    String? title;
+    for (int i = 0; i < _cumulativeItemWidths.length; i++) {
+      if (_cumulativeItemWidths[i] > offset) {
+        title = _entries[i].feedTitle;
+        break;
+      }
+    }
+    title ??= _entries.last.feedTitle;
+    if (title != _currentFeedTitle) {
+      setState(() => _currentFeedTitle = title);
+    }
   }
 
   Future<void> _openEntry(TickerEntry entry) async {
@@ -121,6 +169,7 @@ class _TickerScreenState extends State<TickerScreen>
                 setState(() => _config = updated);
                 if (speedChanged) restartScrolling();
                 if (refreshChanged) _restartRefreshTimer();
+                _computeCumulativeWidths();
               },
         );
         await _service.saveConfig(_config);
@@ -172,6 +221,8 @@ class _TickerScreenState extends State<TickerScreen>
                 color: _config.backgroundColor,
                 child: Row(
                   children: [
+                    if (_config.showFeedTitle && _config.feedTitleStatic)
+                      _buildStaticFeedTitle(),
                     Expanded(
                       child: TickerBar(
                         entries: _entries,
@@ -213,6 +264,36 @@ class _TickerScreenState extends State<TickerScreen>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildStaticFeedTitle() {
+    final title = _currentFeedTitle ?? '';
+    if (title.isEmpty) return const SizedBox.shrink();
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          height: double.infinity,
+          color: _config.foregroundColor,
+          child: Center(
+            child: Text(
+              title,
+              style: TextStyle(
+                color: _config.backgroundColor,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+        VerticalDivider(
+          width: 1,
+          thickness: 1,
+          color: _config.foregroundColor.withValues(alpha: 0.4),
+        ),
+      ],
     );
   }
 }
