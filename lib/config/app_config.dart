@@ -29,6 +29,11 @@ class AppConfig {
   /// Whether to show the feed title label before each headline.
   final bool showFeedTitle;
 
+  /// When [showFeedTitle] is true: if `true` the feed title is shown as a
+  /// fixed static label on the left side of the bar (updated as the ticker
+  /// scrolls); if `false` it is shown inline before each headline.
+  final bool feedTitleStatic;
+
   const AppConfig({
     this.textSpeed = 60,
     this.foregroundColor = Colors.white,
@@ -36,6 +41,7 @@ class AppConfig {
     this.separator = '+++',
     this.refreshIntervalMinutes = 5,
     this.showFeedTitle = true,
+    this.feedTitleStatic = false,
   });
 
   /// Returns a copy of this config with the specified fields replaced.
@@ -46,6 +52,7 @@ class AppConfig {
     String? separator,
     int? refreshIntervalMinutes,
     bool? showFeedTitle,
+    bool? feedTitleStatic,
   }) {
     return AppConfig(
       textSpeed: textSpeed ?? this.textSpeed,
@@ -55,6 +62,7 @@ class AppConfig {
       refreshIntervalMinutes:
           refreshIntervalMinutes ?? this.refreshIntervalMinutes,
       showFeedTitle: showFeedTitle ?? this.showFeedTitle,
+      feedTitleStatic: feedTitleStatic ?? this.feedTitleStatic,
     );
   }
 }
@@ -119,6 +127,7 @@ Future<AppConfig> loadConfig() async {
       separator: readSeparator(json['separator'], fallback: '+++'),
       refreshIntervalMinutes: (json['refreshIntervalMinutes'] as int?) ?? 5,
       showFeedTitle: (json['showFeedTitle'] as bool?) ?? true,
+      feedTitleStatic: (json['feedTitleStatic'] as bool?) ?? false,
     );
   } catch (e) {
     debugPrint('Error loading config: $e');
@@ -139,6 +148,7 @@ Future<void> saveConfig(AppConfig config) async {
       'separator': config.separator,
       'refreshIntervalMinutes': config.refreshIntervalMinutes,
       'showFeedTitle': config.showFeedTitle,
+      'feedTitleStatic': config.feedTitleStatic,
     };
     await file.writeAsString(jsonEncode(json));
   } catch (e) {

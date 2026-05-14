@@ -77,6 +77,7 @@ class TickerBar extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (config.showFeedTitle &&
+                          !config.feedTitleStatic &&
                           entry.feedTitle != null &&
                           entry.feedTitle!.isNotEmpty) ...[
                         Container(
