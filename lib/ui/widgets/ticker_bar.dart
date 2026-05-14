@@ -73,12 +73,40 @@ class TickerBar extends StatelessWidget {
                 onTap: hasLink ? () => onEntryTapped(entry) : null,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Text(
-                    ' ${config.separator} ${entry.title} ${config.separator} ',
-                    style: TickerTheme.tickerText(
-                      color: Theme.of(context).colorScheme.primary,
-                      underline: isHoveredLink,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (config.showFeedTitle &&
+                          entry.feedTitle != null &&
+                          entry.feedTitle!.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary,
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: Text(
+                            entry.feedTitle!,
+                            style: TextStyle(
+                              color: config.backgroundColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      Text(
+                        ' ${config.separator} ${entry.title} ${config.separator} ',
+                        style: TickerTheme.tickerText(
+                          color: Theme.of(context).colorScheme.primary,
+                          underline: isHoveredLink,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

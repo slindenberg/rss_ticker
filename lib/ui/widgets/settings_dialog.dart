@@ -8,12 +8,14 @@ class SettingsDialog extends StatefulWidget {
   final Color initialBackgroundColor;
   final String initialSeparator;
   final int initialRefreshInterval;
+  final bool initialShowFeedTitle;
   final void Function({
     required double speed,
     required Color foregroundColor,
     required Color backgroundColor,
     required String separator,
     required int refreshIntervalMinutes,
+    required bool showFeedTitle,
   })
   onSettingsChanged;
 
@@ -24,6 +26,7 @@ class SettingsDialog extends StatefulWidget {
     required this.initialBackgroundColor,
     required this.initialSeparator,
     required this.initialRefreshInterval,
+    required this.initialShowFeedTitle,
     required this.onSettingsChanged,
   });
 
@@ -37,6 +40,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
   late Color _backgroundColor;
   late TextEditingController _separatorController;
   late int _refreshIntervalMinutes;
+  late bool _showFeedTitle;
 
   @override
   void initState() {
@@ -46,6 +50,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     _backgroundColor = widget.initialBackgroundColor;
     _separatorController = TextEditingController(text: widget.initialSeparator);
     _refreshIntervalMinutes = widget.initialRefreshInterval;
+    _showFeedTitle = widget.initialShowFeedTitle;
   }
 
   @override
@@ -65,6 +70,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
       backgroundColor: _backgroundColor,
       separator: separator,
       refreshIntervalMinutes: _refreshIntervalMinutes,
+      showFeedTitle: _showFeedTitle,
     );
   }
 
@@ -174,6 +180,19 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   },
                 ),
                 const Spacer(),
+                SwitchListTile(
+                  title: const Text('Show feed title'),
+                  subtitle: const Text(
+                    'Display the feed source name before each headline',
+                  ),
+                  value: _showFeedTitle,
+                  contentPadding: EdgeInsets.zero,
+                  onChanged: (value) {
+                    setState(() => _showFeedTitle = value);
+                    _emitSettingsChanged();
+                  },
+                ),
+                const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerRight,
                   child: ElevatedButton(

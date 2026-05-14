@@ -25,11 +25,13 @@ FeedParseResult extractTitlesFromFeed(String xml) {
   Object? rssError;
   try {
     final rssFeed = RssFeed.parse(xml);
+    final feedTitle = rssFeed.title?.trim();
     final entries = (rssFeed.items ?? [])
         .map(
           (item) => TickerEntry(
             title: item.title?.trim() ?? '',
             link: item.link?.trim(),
+            feedTitle: feedTitle,
           ),
         )
         .where((entry) => entry.title.isNotEmpty)
@@ -44,11 +46,13 @@ FeedParseResult extractTitlesFromFeed(String xml) {
   Object? atomError;
   try {
     final atomFeed = AtomFeed.parse(xml);
+    final feedTitle = atomFeed.title?.trim();
     final atomEntries = (atomFeed.items ?? [])
         .map(
           (item) => TickerEntry(
             title: item.title?.trim() ?? '',
             link: item.links?.firstOrNull?.href?.trim(),
+            feedTitle: feedTitle,
           ),
         )
         .where((entry) => entry.title.isNotEmpty)

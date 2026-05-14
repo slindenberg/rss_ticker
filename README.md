@@ -8,6 +8,7 @@
 - Headlines should be clickable and open a browser with the related article.
 - Feeds should be updated automatically.
 - Ability to add and remove RSS or Atom feeds easily.
+- Should display the feed title at the left side, plus option to turn off.
 - Options to change appearance and behavior.
 - Should work on Mac, Windows or Linux desktops.
 

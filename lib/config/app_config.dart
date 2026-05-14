@@ -26,12 +26,16 @@ class AppConfig {
   /// A value ≤ 0 disables automatic refresh.
   final int refreshIntervalMinutes;
 
+  /// Whether to show the feed title label before each headline.
+  final bool showFeedTitle;
+
   const AppConfig({
     this.textSpeed = 60,
     this.foregroundColor = Colors.white,
     this.backgroundColor = const Color(0xFF0D47A1),
     this.separator = '+++',
     this.refreshIntervalMinutes = 5,
+    this.showFeedTitle = true,
   });
 
   /// Returns a copy of this config with the specified fields replaced.
@@ -41,6 +45,7 @@ class AppConfig {
     Color? backgroundColor,
     String? separator,
     int? refreshIntervalMinutes,
+    bool? showFeedTitle,
   }) {
     return AppConfig(
       textSpeed: textSpeed ?? this.textSpeed,
@@ -49,6 +54,7 @@ class AppConfig {
       separator: separator ?? this.separator,
       refreshIntervalMinutes:
           refreshIntervalMinutes ?? this.refreshIntervalMinutes,
+      showFeedTitle: showFeedTitle ?? this.showFeedTitle,
     );
   }
 }
@@ -112,6 +118,7 @@ Future<AppConfig> loadConfig() async {
       ),
       separator: readSeparator(json['separator'], fallback: '+++'),
       refreshIntervalMinutes: (json['refreshIntervalMinutes'] as int?) ?? 5,
+      showFeedTitle: (json['showFeedTitle'] as bool?) ?? true,
     );
   } catch (e) {
     debugPrint('Error loading config: $e');
@@ -131,6 +138,7 @@ Future<void> saveConfig(AppConfig config) async {
       'backgroundColor': colorToHex(config.backgroundColor),
       'separator': config.separator,
       'refreshIntervalMinutes': config.refreshIntervalMinutes,
+      'showFeedTitle': config.showFeedTitle,
     };
     await file.writeAsString(jsonEncode(json));
   } catch (e) {
